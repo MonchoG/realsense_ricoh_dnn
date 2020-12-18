@@ -1,0 +1,3 @@
+/detectors/mask_rcnn/weights/*
+/detectors/yolo_detector/weights/*
+*__pycache__*
