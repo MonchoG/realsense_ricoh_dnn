@@ -1,3 +1,4 @@
 /detectors/mask_rcnn/weights/*
 /detectors/yolo_detector/weights/*
+/localization/Attempts/*
 *__pycache__*
