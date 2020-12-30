@@ -2,157 +2,161 @@ import requests
 import json
 from requests.auth import HTTPDigestAuth
 import time
-import cv2
-import numpy as np
 
-# Returns response from /osc/info ednpoint
-def get_device_info():
-    request = requests.get("http://192.168.1.1/osc/info")
-    print(request.json())
-    return request
+# Client wrapper to access ricoh theta V through WiFi api and control device
+class RicohTheta:
+    def __init__(self, device_id, device_password):
+        self.base_url = 'http://192.168.1.1'
+        self.device_id = device_id
+        self.device_password = device_password
 
+        # set device storage prop for easy access
+        device_state = self.get_device_state()
+        self.storage_uri = device_state["state"]["storageUri"]
+        
+        # set shooting mode prop
+        device_option = self.get_device_options()
+        self.shooting_mode = device_option["results"]["options"]["captureMode"]
 
-def post_device_state():
-    request = requests.post('http://192.168.1.1/osc/state')
-    print(request.json())
-    return request
+    # Base url is the ip 'http://192.168.1.1'
+    # path should be /path/method for ex '/osc/info'
 
+    def get_request(self, path):
+        get = requests.get(self.base_url + path)
+        return get
 
-def start_capture():
-    request = requests.post(
-        'http://192.168.1.1/osc/commands/execute', json={'name': 'camera.startCapture'})
-    print(request.json())
-    return request
+    # Base url is the ip 'http://192.168.1.1'
+    # path should be /path/method for ex '/osc/info'
+    # body is specific to the endpoint JSON dict with parameters
+    def post_request(self, path, body=None):
+        post = requests.post(self.base_url + path, data=body,  headers={
+            'content-type': 'application/json'}, auth=HTTPDigestAuth(self.device_id, self.device_password), timeout=5)
+        return post
 
+    # Calls the "osc/info" endpoint of ricoh Api using GET
+    # Acquires basic information of the camera and supported functions.
+    def get_device_info(self):
+        request = self.get_request("/osc/info")
+        return request.json()
 
-def stop_capture():
-    request = requests.post(
-        'http://192.168.1.1/osc/commands/execute', json={'name': 'camera.stopCapture'})
-    print(request.json())
-    return request
+    # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
+    # Returns the following camera options : captureMode,videoStitching,iso,remainingSpace
+    def get_device_options(self):
+        body = json.dumps({"name": "camera.getOptions",	"parameters":
+                           {"optionNames": [
+                               "captureMode",
+                               "_imageStitching",
+                               "videoStitching",
+                               "fileFormat",
+                               "fileFormatSupport",
+                               "previewFormat",
+                               "iso",
+                               "remainingSpace"]
+                            }})
+        request = self.post_request("/osc/commands/execute", body)
+        return request.json()
 
+    # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
+    # Sets the device to video mode, the parameters can be modified according to the API and need
+    # Sets to 4k Mp4
+    def set_device_videoMode(self):
+        body = json.dumps({"name": "camera.setOptions",	"parameters": {	"options": {
+            "captureMode": "video",	"sleepDelay": 1200, "offDelay": 600, "videoStitching": "ondevice",
+           # "fileFormat": {"type": "mp4", "width": 3840, "height": 1920,  "_codec": "H.264/MPEG-4 AVC"},
+            "_microphoneChannel": "1ch", "_gain": "mute",	"_shutterVolume": 100,
+            "previewFormat": {"width": 3840, "height": 1920, "framerate": 30}}}})
+        request = self.post_request("/osc/commands/execute", body)
+        return request.json()
 
-def take_picture():
-    request = requests.post(
-        'http://192.168.1.1/osc/commands/execute', json={'name': 'camera.takePicture'})
-    print(request.json())
-    return request
-# Can use request.json() for object
+    # Calls the "/osc/commands/execute" endpoint of ricoh Api using post
+    # Sets the device to video mode, the parameters can be modified according to the API and need
+    def set_device_imageMode(self):
+        body = json.dumps({"name": "camera.setOptions",
+                           "parameters": {
+                               "options": {
+                                   "captureMode": "image",	"sleepDelay": 1200, "offDelay": 600, "_imageStitching": "dynamicAuto",
+                                   # "fileFormat": {"type": "jpeg", "width": 5376, "height": 2688},
+                                   "_microphoneChannel": "1ch", "_gain": "mute",	"_shutterVolume": 100,
+                                   "previewFormat": {"width": 3840, "height": 1920, "framerate": 30}}}})
+        request = self.post_request("/osc/commands/execute", body)
+        return request.json()
+    # Calls the "osc/state" endpoint of ricoh Api using POST
+    # Acquires the camera states. Use CheckForUpdates to check whether the state object has changed its contents.
+    #  Returns json object containing
+    # { fingerprint : String, Takes a unique valueper current state ID.
+    #  state : object, Camera state (refer to Api docs for all props of this object)}
+    # For ex. device storage and battery level can be extracted from this response.
 
+    def get_device_state(self):
+        request = self.post_request("/osc/state")
+        print(pretty_response(request.json()))
+        return request.json()
 
-def list_files():
-    request = requests.post(
-        "http://192.168.1.1/osc/commands/execute", json={'name': 'camera.listFiles',
-                                                         'parameters':
-                                                             {"fileType": "all",
-                                                              "entryCount": 10}})
-    print(request.json())
-    return request
+    # Starts continuous shooting.
+    # The shooting method changes according to the shooting mode (captureMode) and _mode settings.
+    def start_capture(self):
+        body = json.dumps({"name": "camera.startCapture"})
+        request = self.post_request("/osc/commands/execute", body)
+        return request.json()
 
+    # Stops continuous shooting.
+    # The output “results” is none when the shooting method is the interval shooting with limited number, the composite shooting, multi bracket shooting or time shift shooting.
+    # In case of the video shooting or the limitless interval shooting, it is as below.
+    # set withDownload to True if want to save the videos immediatly after posting the request
+    # returns the response from the stopCapture command.
+    def stop_capture(self, withDownload=False):
+        body = json.dumps({"name": "camera.stopCapture"})
+        request = self.post_request("/osc/commands/execute", body)
+        json_response = request.json()
+        print(pretty_response(json_response))
+        if withDownload:
+            self.download_files(json_response["results"]["fileUrls"])
 
-def get_file(file_url="http://192.168.1.1/files/90014a68423861503e03c359b0ad5700/100RICOH/R0010010.MP4", save_path="video.mp4"):
-    # send a HTTP request to the server and save
-    # the HTTP response in a response object called response
-    response = requests.get(file_url, stream = True)
-    
-    with open(save_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=1024):
-            # writing one chunk at a time to video file
-            if chunk:
+        return json_response
+
+    # Downloads the files from the links specified in files
+    # files is list with download urls from Ricoh Storage
+    def download_files(self, files):
+        file_count = 0
+        for a_file in files:
+            response = requests.get(a_file, stream=True)
+            # reponse returns file path link, the name of the file starts from char 67
+            file_name = a_file[67:]
+            with open(file_name, 'wb') as f:
                 # write the contents of the response (r.content)
                 # to a new file in binary mode.
                 f.write(response.content)
-        return response
+            file_count+=1
+            print("[INFO] Downloading file {}complete...".format("a_file[67:] "))
+        print("[INFO] All files downloaded...")
+            
 
 
-def get_live_preview():
-    fr_c = 0
-    url = "".join(("http://192.168.1.1:80/osc/commands/execute"))
-    body = json.dumps({"name": "camera.getLivePreview"})
-    try:
-        response = requests.post(url, data=body, headers={
-                                 'content-type': 'application/json'}, auth=HTTPDigestAuth('THETAYL00248307', '00248307'), stream=True, timeout=5)
-        print("Preview posted; checking response")
-        if response.status_code == 200:
-            bytes = ''
-            jpg = ''
-            i = 0
-            for block in response.iter_content(chunk_size=10000):
-
-                if (bytes == ''):
-                    bytes = block
-                else:
-                    bytes = bytes + block
-
-                # Search the current block of bytes for the jpq start and end
-                a = bytes.find(b'\xff\xd8')
-                b = bytes.find(b'\xff\xd9')
-
-                # If you have a jpg
-                if a != - 1 and b != -1:
-                    print("image - loading")
-                    image = bytes[a:b + 2]
-                    bytes = bytes[b + 2:]
-                    i = cv2.imdecode(np.frombuffer(
-                        image, dtype=np.uint8), cv2.IMREAD_ANYCOLOR)
-                    cv2.imshow('i', i)
-                    fr_c += 1
-                    #cv2.imwrite("images/img{}.jpg".format(fr_c), i)
-                    if cv2.waitKey(1) == 27:
-                        exit(0)
-        else:
-            print("theta response.status_code _preview: {0}".format(
-                response.status_code))
-            response.close()
-    except Exception as err:
-        print("theta error _preview: {0}".format(err))
+# Utils
+def pretty_response(response):
+    return json.dumps(response, indent=2, sort_keys=True)
+###
 
 
-def set_options():
-    url = "".join(("http://192.168.1.1:80/osc/commands/execute"))
-    body = json.dumps({"name": "camera.setOptions",	"parameters": {	"options": {
-        "captureMode": "video",	"sleepDelay": 1200, "offDelay": 600, "videoStitching": "ondevice",
-        "_microphoneChannel": "1ch", "_gain": "mute",	"_shutterVolume": 100,
-        "previewFormat": {"width": 3840, "height": 1920, "framerate": 30}}}})
-    HEADERS = {'content-type': 'application/json'}
-    try:
-        req = requests.post(url, data=body, headers=HEADERS, auth=HTTPDigestAuth(
-            'THETAYL00248307', '00248307'), timeout=3)
-        print(req.json(),)
-    except Exception as e:
-        print("Error {}".format(e))
-        pass
+if __name__ == "__main__":
 
+    new_cam = 'THETAYL00248307'
+    new_cam_pass = '00248307'
+    slw_cam = 'THETAYL00160236'
+    slw_cam_pass = '00160236'
 
-def get_options():
-    url = "".join(("http://192.168.1.1:80/osc/commands/execute"))
-    body = json.dumps({"name": "camera.getOptions",	"parameters":
-                       {"optionNames": [
-                           "captureMode",
-                           "videoStitching",
-                           "previewFormat",
-                           "iso",
-                           "remainingSpace"]
-                        }})
-    HEADERS = {'content-type': 'application/json'}
-    try:
-        req = requests.post(url, data=body, headers=HEADERS, auth=HTTPDigestAuth(
-            'THETAYL00248307', '00248307'), timeout=3)
-        print(req.json())
-    except Exception as e:
-        print("Error {}".format(e))
-        pass
+    ricoh = RicohTheta(slw_cam, slw_cam_pass)
+    device_info = ricoh.get_device_info()
+    print(pretty_response(device_info))
 
+    ricoh_options = ricoh.get_device_options()
+    print(pretty_response(ricoh_options))
 
-#list_files()
-# get_options()
-# set_options()
-# get_options()
-
-# get_device_info()
-# post_device_state()
-# get_live_preview()
-
-# start_capture()
-# stop_capture()
-#get_file()
+    #ricoh.set_device_videoMode()
+    ricoh_options = ricoh.get_device_options()
+    print(pretty_response(ricoh_options))
+    response_start = ricoh.start_capture()
+    print(pretty_response(response_start))
+    time.sleep(5)
+    response_stop = ricoh.stop_capture(True)
+    print(pretty_response(response_stop))
