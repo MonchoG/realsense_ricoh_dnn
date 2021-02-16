@@ -108,15 +108,15 @@ class Yolo:
                     distance_center = self.get_distance_center(
                         aligned_depth_frame, depth_scale, x, y, w, h, self.LABELS[classIDs[i]])
                     # Better accuracy for objects that completely fill the bounding box, otherwise distance becomes inaccuraty
-                    distance = self.get_distance_bounding_box(
-                        aligned_depth_frame, depth_scale, x, y, w, h, self.LABELS[classIDs[i]])
+                    # distance = self.get_distance_bounding_box(
+                    #     aligned_depth_frame, depth_scale, x, y, w, h, self.LABELS[classIDs[i]])
                 # draw a bounding box rectangle and label on the image
                 col = [int(c) for c in self.COLORS[classIDs[i]]]
                 cv2.rectangle(input_image, (x, y), (x + w, y + h), col, 2)
                 # add dot at center
                 cv2.circle(input_image, (int((x + (x + w))/2),
                                          int((y + (y + h))/2)), radius=3, color=col, thickness=3)
-                if distance or distance_center:
+                if distance_center:
                     text = "{}: {:.4f} : distance {:.4f}m".format(
                         self.LABELS[classIDs[i]], confidences[i], distance_center)
                 else:
@@ -124,6 +124,26 @@ class Yolo:
                         self.LABELS[classIDs[i]], confidences[i])
                 cv2.putText(input_image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, col, 2)
+
+        # Compute distance to center of img
+        if aligned_depth_frame and depth_scale:
+            col_center = (0, 0, 255)
+
+            height, width, channels = input_image.shape
+            upper_left = ((width // 4) + 200, (height // 4))
+            bottom_right = ((width * 3 // 4) - 200, (height * 3 // 4)+100)
+            # draw in the image
+
+            # dist = self.get_distance(aligned_depth_frame, depth_scale, x,y,w,h, 'center')
+            cv2.rectangle(input_image, upper_left, bottom_right,
+                          (0, 255, 0), thickness=1)
+
+            # cv2.rectangle(input_image, (x,y), (x + w, y + h), col_center, 2)
+            # add dot at center
+            cv2.circle(input_image,  (int(width/2), int(height/2)),
+                       radius=3, color=col_center, thickness=3)
+            # cv2.putText(input_image, 'Frame  center: : distance {:.4f}m'.format(dist), (center_coordinates[0], center_coordinates[1] - 5), cv2.FONT_HERSHEY_SIMPLEX,
+            #             0.5, col_center, 2)
 
         return input_image
 
@@ -145,16 +165,8 @@ class Yolo:
     def get_distance_bounding_box(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
         return self.get_distance(aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False)
 
-    # Helper method to scale down bounding box and call {@get_distance}
-    def get_distance_smaller_box(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
-        # create smaller BB
-        x_2 = (x + w)/4
-        y_2 = (y + h) / 4
-        w_2 = (w - x) / 4
-        h_2 = (h - y)/4
-        return self.get_distance(aligned_depth_frame, depth_scale, x_2, y_2, w_2, h_2, label, verbose=False)
-
     # Calculates distance based on mean of all the values in the cropped from the depth image segment
+
     def get_distance(self, aligned_depth_frame, depth_scale, x, y, w, h, label, verbose=False):
         xmin_depth = int(x)
         ymin_depth = int(y)

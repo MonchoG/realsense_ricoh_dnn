@@ -22,31 +22,33 @@ import time
 #                  labels='damage_detection\yolo\weights\yolo-coco\coco.names', confidence_param=0.3, thresh_param=0.5)
 
 # yolo 4
-yolo = Yolo(config='detectors\yolo_detector\weights\yolo4coco\yolo4.cfg',
-                 weights='detectors\yolo_detector\weights\yolo4coco\yolo4.weights',
-                 labels='detectors\yolo_detector\weights\yolo-coco\coco.names', confidence_param=0.3, thresh_param=0.5, use_cuda=True)
+# yolo = Yolo(config='detectors\yolo_detector\weights\yolo4coco\yolo4.cfg',
+#             weights='detectors\yolo_detector\weights\yolo4coco\yolo4.weights',
+#             labels='detectors\yolo_detector\weights\yolo-coco\coco.names', confidence_param=0.3, thresh_param=0.5, use_cuda=True)
 
 # # yolo 4 tiny is default
-# yolo = Yolo(confidence_param=0.3, thresh_param=0.5)
+yolo = Yolo(confidence_param=0.3, thresh_param=0.25)
 
 # File path....
-cap = cv2.VideoCapture('video.mp4')
-
+# cap = cv2.VideoCapture('video.mp4')
+cap = cv2.VideoCapture(1)
+cap.set(3, 1280)
+cap.set(4, 720)
 # Define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('output.avi',fourcc, 20.0, (640,480))
+out = cv2.VideoWriter('output.avi', fourcc, 20.0, (1280, 720))
 
 length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-print( length )
+print(length)
 
 
 try:
-   
+
     frame_count = 0
     start_time = time.time()
     frame_time = start_time
 
-    while cap.isOpened(): # True 
+    while cap.isOpened():  # True
         #
         # read data from camera
         #
@@ -56,21 +58,22 @@ try:
         frame_count += 1
         last_time = frame_time
         frame_time = time.time()
-       
-        frame_detection =  yolo.detect(frame)
+
+        frame_detection = yolo.detect(frame)
         frame_draw = yolo.draw_results_no_depth(frame_detection, frame)
         if frame_draw is not None:
-            out.write(frame_draw)
-            left = length - frame_count
-            print("wrote frame, {} left" .format(left))
-            #cv2.imshow('360Camera', frame_draw)
+            #out.write(frame_draw)
+            # left = length - frame_count
+            # print("wrote frame, {} left" .format(left))
+            cv2.imshow('360Camera', frame_draw)
+            #cv2.imwrite('{}.JPEG'.format(frame_count), frame_draw)
 
-            # Press esc or 'q' to close the image window
-        # key = cv2.waitKey(1)
-        # if key & 0xFF == ord('q') or key == 27:
-        #     cv2.destroyAllWindows()
-        #     break
-        
+        # Press esc or 'q' to close the image window
+        key = cv2.waitKey(1)
+        if key & 0xFF == ord('q') or key == 27:
+            cv2.destroyAllWindows()
+            break
+
 finally:
     cap.release()
     out.release()

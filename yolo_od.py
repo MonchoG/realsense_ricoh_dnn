@@ -32,7 +32,7 @@ yolo = Yolo(confidence_param=0.3, thresh_param=0.5)
 
 enable_rgb = True
 enable_depth = True
-enable_imu = False
+enable_imu = True
 device_id = None
 
 width = 1280
@@ -42,9 +42,24 @@ channels = 3
 # set to non-zero to calculate the max frame rate using given number of frames
 profile_frames = -1
 
+
+bag_dir_path = os.path.join(os.path.dirname(__file__), '/output/bag/')
+
+# set the file name recorded
+if not os.path.exists(bag_dir_path):
+    os.makedirs(bag_dir_path)
+
+filename = "test3imu"
+# add ext for bag file
+if '.bag' not in filename:
+    filename += '.bag'
+
+write_bag_path = "output/bag/" + filename
+read_bag_path = "output/bag/test2imu.bag"
+
 try:
     camera = depth_cam(width=width, height=height, channels=channels,
-                       enable_rgb=enable_rgb, enable_depth=enable_depth, enable_imu=enable_imu, device_id=device_id)
+                       enable_rgb=enable_rgb, enable_depth=enable_depth, enable_imu=enable_imu, record_bag=write_bag_path, read_bag=None, device_id=device_id)
 
     frame_count = 0
     start_time = time.time()
@@ -73,6 +88,7 @@ try:
 
         if enable_rgb or enable_depth:
             if color_image is not None:
+                color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
                 cv2.imshow('RealSense', color_image)
 
             # Press esc or 'q' to close the image window

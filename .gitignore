@@ -1,4 +1,8 @@
 /detectors/mask_rcnn/weights/*
 /detectors/yolo_detector/weights/*
 /localization/Attempts/*
+*.JPEG
+*.bag
+*.avi
+*.MP4
 *__pycache__*

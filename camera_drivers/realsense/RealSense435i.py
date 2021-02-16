@@ -20,12 +20,14 @@ HEIGHT = 480
 CHANNELS = 3
 
 class RealSense435i:
-    def __init__(self, width=WIDTH, height=HEIGHT, channels=CHANNELS, enable_rgb=True, enable_depth=True, enable_imu=False, device_id=None):
+    def __init__(self, width=WIDTH, height=HEIGHT, channels=CHANNELS, enable_rgb=True, enable_depth=True, enable_imu=False,record_bag=None, read_bag=None, device_id=None):
         # "923322071108" # serial number of device to use or None to use default
         self.device_id = device_id
         self.enable_imu = enable_imu
         self.enable_rgb = enable_rgb
         self.enable_depth = enable_depth
+        self.record_bag = record_bag
+        self.read_bag = read_bag
 
         self.width = width
         self.height = height
@@ -57,6 +59,8 @@ class RealSense435i:
             self.pipeline = rs.pipeline()
             config = rs.config()
 
+         
+
             # if we are provided with a specific device, then enable it
             if None != self.device_id:
                 config.enable_device(self.device_id)
@@ -65,7 +69,17 @@ class RealSense435i:
                 config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30) # depth
 
             if self.enable_rgb:
-                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30) # rgb
+                config.enable_stream(rs.stream.color, 1280, 720, rs.format.rgb8, 30) # rgb
+
+            if self.read_bag:
+                print(self.read_bag)
+                config.enable_device_from_file(self.read_bag)
+            elif self.record_bag:
+                print("Recording a file")
+                config.enable_record_to_file(record_bag)
+                
+            else:
+                print('No recording or reading of bag....')
 
             # Start streaming
             profile = self.pipeline.start(config)
